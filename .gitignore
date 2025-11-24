@@ -90,12 +90,10 @@ venv/
 ENV/
 env/
 
-# Docker files (reference only, not needed in repo)
-Dockerfile
-Dockerfile.frontend
-docker-compose.yml
-docker-compose.prod.yml
-.dockerignore
+# .env files with secrets (keep .env.sample and .env.example for reference)
+.env
+.env.local
+.env.*.local
 
 # Bun lockfile (optional, can commit if needed for consistency)
 # bun.lockb

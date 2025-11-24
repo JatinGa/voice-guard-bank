@@ -1,0 +1,90 @@
+version: '3.9'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sentinelpay-backend
+    ports:
+      - "5000:5000"
+    environment:
+      # Supabase Configuration
+      SUPABASE_URL: ${SUPABASE_URL:-https://your-project.supabase.co}
+      SUPABASE_KEY: ${SUPABASE_KEY:-your-anon-key}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-your-service-key}
+      
+      # Flask Configuration
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-False}
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      
+      # API Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 5000
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173,http://frontend:3000
+      ENVIRONMENT: production
+      
+      # Model Configuration
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      DEVICE: ${DEVICE:-cpu}
+      
+      # Twilio Configuration (for SMS OTP)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER:-}
+    
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    networks:
+      - sentinelpay-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Service (Optional - for Docker development)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sentinelpay-frontend
+    ports:
+      - "8080:8080"
+    environment:
+      VITE_API_URL: http://backend:5000/api
+      VITE_USE_BACKEND: "true"
+    depends_on:
+      - backend
+    networks:
+      - sentinelpay-network
+    restart: unless-stopped
+
+  # Optional: PostgreSQL Database (if using local database instead of Supabase)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: sentinelpay-db
+  #   environment:
+  #     POSTGRES_USER: ${DB_USER:-postgres}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+  #     POSTGRES_DB: ${DB_NAME:-sentinelpay}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   networks:
+  #     - sentinelpay-network
+  #   restart: unless-stopped
+
+networks:
+  sentinelpay-network:
+    driver: bridge
+
+volumes:
+  # postgres_data:
+  #   driver: local

@@ -1,0 +1,47 @@
+# SentinelPay Frontend - Multi-stage Dockerfile
+
+# Stage 1: Builder
+FROM node:18-alpine as builder
+
+WORKDIR /build
+
+# Copy package files
+COPY package.json package-lock.json* bun.lockb* ./
+
+# Install dependencies
+RUN if [ -f bun.lockb ]; then \
+      npm install -g bun && \
+      bun install; \
+    else \
+      npm ci; \
+    fi
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN npm run build
+
+# Stage 2: Runtime
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install serve to run the built app
+RUN npm install -g serve
+
+# Copy built application from builder
+COPY --from=builder /build/dist ./dist
+
+# Set environment variables
+ENV NODE_ENV=production
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+
+# Run application
+CMD ["serve", "-s", "dist", "-l", "8080"]
