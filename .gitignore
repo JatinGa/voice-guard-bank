@@ -42,3 +42,61 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Documentation - Development/Reference Only (Don't commit)
+DOCKER_SETUP.md
+DOCKER_QUICKSTART.txt
+OTP_AND_DOCKER_SUMMARY.md
+OTP_DOCKER_COMPLETE.txt
+CHANGES_SUMMARY.md
+IMPLEMENTATION_OVERVIEW.txt
+README_OTP_DOCKER.txt
+GET_STARTED.txt
+SETUP_SUMMARY.txt
+SETUP_CHECKLIST.md
+BACKEND_SETUP.md
+BACKEND_COMPLETE.md
+DOCUMENTATION_INDEX.md
+IMPLEMENTATION_SUMMARY.md
+FINAL_SUMMARY.md
+FILES_CREATED_MANIFEST.md
+QUICK_REFERENCE.txt
+FRONTEND_BACKEND_INTEGRATION.md
+BACKEND.md
+START_HERE.md
+VERIFICATION_COMPLETE.txt
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+
+# Docker files (reference only, not needed in repo)
+Dockerfile
+Dockerfile.frontend
+docker-compose.yml
+docker-compose.prod.yml
+.dockerignore
+
+# Bun lockfile (optional, can commit if needed for consistency)
+# bun.lockb
+

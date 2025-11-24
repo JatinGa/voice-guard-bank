@@ -11,6 +11,7 @@ import RiskScoreCard from "@/components/RiskScoreCard";
 import VoiceButton from "@/components/VoiceButton";
 import GuardianAlert from "@/components/GuardianAlert";
 import OTPModal from "@/components/OTPModal";
+import { mockApiService } from "@/lib/mockApi";
 
 interface Message {
   id: string;
@@ -163,12 +164,7 @@ const Assistant = () => {
       const token = session?.access_token;
 
       if (option === "Check Balance") {
-        const res = await fetch('/supabase/functions/mock-banking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' },
-          body: JSON.stringify({ action: 'get_balance' }),
-        }).then((r) => r.json()).catch(() => null);
-
+        const res = await mockApiService.mockBanking('get_balance');
         const assistantMessage: Message = {
           id: (Date.now() + 2).toString(),
           role: 'assistant',
@@ -177,15 +173,10 @@ const Assistant = () => {
         };
         setMessages((prev) => [...prev, assistantMessage]);
       } else if (option === 'Recent Transactions') {
-        const res = await fetch('/supabase/functions/mock-banking', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' },
-          body: JSON.stringify({ action: 'get_transactions' }),
-        }).then((r) => r.json()).catch(() => null);
-
+        const res = await mockApiService.mockBanking('get_transactions');
         const txs = res?.transactions || [];
         const content = txs.length
-          ? `Here are your recent transactions:\n${txs.map((t: any, i: number) => `${i+1}) ${t.description} ${t.amount}`).join('\n')}`
+          ? `Here are your recent transactions:\n${txs.map((t: any, i: number) => `${i+1}) ${t.description} ₹${Math.abs(t.amount)}`).join('\n')}`
           : 'No transactions available.';
 
         const assistantMessage: Message = {
@@ -238,7 +229,6 @@ const Assistant = () => {
 
   const handleVoiceResult = (result: { transcript?: string; liveness?: number; details?: any }) => {
     if (result.transcript) {
-      setInput(result.transcript);
       // If liveness score is provided and low, block and warn
       if (typeof result.liveness === "number" && result.liveness < 50) {
         setCurrentRisk("HIGH");
@@ -246,7 +236,24 @@ const Assistant = () => {
         toast.error("Liveness check failed — possible deepfake detected. Transaction paused.");
         return;
       }
-      setTimeout(() => handleSendMessage(), 400);
+      
+      // Process voice command
+      const text = result.transcript.toLowerCase();
+      setInput(result.transcript);
+      
+      // Auto-execute simple commands without text confirmation
+      if (text.includes("balance")) {
+        setTimeout(() => handleOptionSelect("Check Balance"), 300);
+      } else if (text.includes("transaction") || text.includes("history")) {
+        setTimeout(() => handleOptionSelect("Recent Transactions"), 300);
+      } else if (text.includes("transfer")) {
+        setTimeout(() => handleOptionSelect("Transfer Money"), 300);
+      } else if (text.includes("scam") || text.includes("fraud")) {
+        setTimeout(() => handleOptionSelect("Report Scam"), 300);
+      } else {
+        // Otherwise, send as normal message
+        setTimeout(() => handleSendMessage(), 300);
+      }
     } else if (result.details?.error) {
       toast.error("Voice processing failed: " + result.details.error);
     }

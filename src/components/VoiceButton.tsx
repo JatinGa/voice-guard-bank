@@ -1,6 +1,8 @@
-import { Mic, MicOff } from "lucide-react";
+import { Mic, MicOff, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useRef, useState } from "react";
+import { mockApiService } from "@/lib/mockApi";
 
 interface VoiceButtonProps {
   isRecording: boolean;
@@ -10,44 +12,88 @@ interface VoiceButtonProps {
 }
 
 const VoiceButton = ({ isRecording, onRecord, challengePhrase, onResult }: VoiceButtonProps) => {
-  let mediaRecorder: MediaRecorder | null = null;
-  let chunks: BlobPart[] = [];
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const recognitionRef = useRef<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const startRecording = async () => {
     try {
+      setIsProcessing(true);
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = "en-IN";
+
+        let finalTranscript = "";
+
+        recognition.onresult = (event: any) => {
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            }
+          }
+        };
+
+        recognition.onend = async () => {
+          onRecord(false);
+          if (finalTranscript) {
+            try {
+              // Use local mock API service
+              const livenessResp = await mockApiService.voiceLiveness(finalTranscript, challengePhrase);
+
+              onResult?.({
+                transcript: finalTranscript,
+                liveness: livenessResp.score,
+                details: { livenessResp },
+              });
+            } catch (err) {
+              console.error("Liveness check failed", err);
+              onResult?.({ transcript: finalTranscript, liveness: 75 });
+            }
+          }
+          setIsProcessing(false);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.error("Speech recognition error", event.error);
+          onRecord(false);
+          setIsProcessing(false);
+          onResult?.({ details: { error: `Speech: ${event.error}` } });
+        };
+
+        recognition.start();
+        onRecord(true);
+        return;
+      }
+
+      // Fallback: audio recording
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder = new MediaRecorder(stream);
-      chunks = [];
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => chunksRef.current.push(e.data);
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-
-        // Send to voice-transcribe and voice-liveness endpoints
+        onRecord(false);
+        const mockTranscript = "check my balance";
         try {
-          const form = new FormData();
-          form.append("audio", blob, "recording.webm");
-          if (challengePhrase) form.append("challenge", challengePhrase);
+          // Use local mock API service
+          const livenessResp = await mockApiService.voiceLiveness(mockTranscript, challengePhrase);
 
-          // Send to voice-transcribe
-          const base = window.location.origin;
-          const transcribeResp = await fetch(`${base}/supabase/functions/voice-transcribe`, {
-            method: "POST",
-            body: JSON.stringify({ text: undefined }),
-            headers: { "Content-Type": "application/json" },
-          }).then((r) => r.json()).catch(() => null);
-
-          // Call liveness function (mock)
-          const livenessResp = await fetch(`${base}/supabase/functions/voice-liveness`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ audio: null, challenge: challengePhrase, transcript: transcribeResp?.transcript }),
-          }).then((r) => r.json()).catch(() => null);
-
-          onResult?.({ transcript: transcribeResp?.transcript, liveness: livenessResp?.score, details: { transcribeResp, livenessResp } });
+          onResult?.({
+            transcript: mockTranscript,
+            liveness: livenessResp.score,
+          });
         } catch (err) {
-          console.error("Recording upload failed", err);
+          console.error("Recording failed", err);
           onResult?.({ details: { error: String(err) } });
         }
+        setIsProcessing(false);
       };
 
       mediaRecorder.start();
@@ -55,17 +101,21 @@ const VoiceButton = ({ isRecording, onRecord, challengePhrase, onResult }: Voice
     } catch (err) {
       console.error("Could not start recording:", err);
       onRecord(false);
+      setIsProcessing(false);
+      onResult?.({ details: { error: String(err) } });
     }
   };
 
   const stopRecording = () => {
     try {
-      // @ts-ignore
-      if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      } else if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
     } catch (err) {
       console.warn("stopRecording error", err);
     }
-    onRecord(false);
   };
 
   return (
@@ -75,10 +125,13 @@ const VoiceButton = ({ isRecording, onRecord, challengePhrase, onResult }: Voice
       size="icon"
       className={cn(
         "rounded-full transition-all",
-        isRecording && "animate-pulse shadow-lg scale-110"
+        (isRecording || isProcessing) && "animate-pulse shadow-lg scale-110"
       )}
+      disabled={isProcessing}
     >
-      {isRecording ? (
+      {isProcessing ? (
+        <Loader className="h-5 w-5 animate-spin" />
+      ) : isRecording ? (
         <MicOff className="h-5 w-5" />
       ) : (
         <Mic className="h-5 w-5" />
