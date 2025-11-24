@@ -4,70 +4,54 @@
 
 **URL**: https://lovable.dev/projects/260dc0bb-ea45-4004-8db4-5d874eac61a7
 
-## How can I edit this code?
+# SentinelPay
 
-There are several ways of editing your application.
+SentinelPay is a voice-first banking assistant prototype focused on preventing voice-based scams. It includes mock Supabase Edge Functions and frontend scaffolding for liveness checks, stress detection, scam phrase interruption, guardian flows, and explainable risk decisions.
 
-**Use Lovable**
+## Features
+- Anti–Deepfake Voice Liveness Check (challenge-response)
+- Stress & emotion inference from speech (mocked)
+- Scam phrase pattern interruption and warnings
+- Guardian mode and OTP flows for high-risk transactions
+- Explainable risk scoring with human-readable reasons
+- Offline support (service worker) for basic functionality
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/260dc0bb-ea45-4004-8db4-5d874eac61a7) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## Quick start (Windows PowerShell)
+1. Copy the example env and fill values:
+```powershell
+cp .env.example .env.local
+notepad .env.local
+```
+2. Install dependencies and run dev server:
+```powershell
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+3. (Optional) Run Supabase Edge Functions locally using Supabase CLI:
+```powershell
+# Install and login to supabase CLI per docs
+cd supabase/functions
+supabase functions serve
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+If you do not want to use ML services during development, set `VITE_USE_ML=false` in your `.env.local` and the assistant will fall back to a hardcoded menu of options.
 
-**Use GitHub Codespaces**
+## Files of interest
+- `src/pages/Assistant.tsx` — chat UI and orchestration; contains the ML and fallback option flows
+- `src/components/VoiceButton.tsx` — media recorder and upload flow
+- `src/integrations/supabase/client.ts` — Supabase client bootstrap
+- `supabase/functions/*` — serverless function implementations (mock transcription, NLU, risk evaluation, transaction execution, mock banking, voice-liveness)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Security
+- Never commit secret keys (service role keys, API keys). Use server-side environment variables for sensitive operations.
+- The liveness and emotion detection implementations are mocked and intended as a scaffold for integrating real models on the server-side.
 
-## What technologies are used for this project?
+## Next steps
+- Replace mock liveness with a proper speaker-verification model.
+- Add IndexedDB queueing for offline transaction requests.
+- Integrate real ASR and emotion/stress models (OpenAI/Whisper, AssemblyAI, or on-prem models).
 
-This project is built with:
-
+## License & notes
+This repository contains prototype code and mock functions for demonstration. Do not use as-is in production without adding proper security, testing, and model validation.
 - Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/260dc0bb-ea45-4004-8db4-5d874eac61a7) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)

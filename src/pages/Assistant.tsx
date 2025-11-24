@@ -25,12 +25,15 @@ const Assistant = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [challengePhrase, setChallengePhrase] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [currentRisk, setCurrentRisk] = useState<"LOW" | "MEDIUM" | "HIGH">("LOW");
   const [showGuardianAlert, setShowGuardianAlert] = useState(false);
   const [showOTP, setShowOTP] = useState(false);
   const [user, setUser] = useState(null);
+  const useML = import.meta.env.VITE_USE_ML !== 'false';
+  const [showFallbackOptions, setShowFallbackOptions] = useState(false);
 
   useEffect(() => {
     // Check auth
@@ -82,6 +85,19 @@ const Assistant = () => {
     setIsLoading(true);
 
     try {
+      // If ML is disabled, show fallback options instead of calling models
+      if (!useML) {
+        setShowFallbackOptions(true);
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "I can help with common banking tasks — choose an option:",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        setIsLoading(false);
+        return;
+      }
       // Simulate AI response with risk evaluation
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
@@ -131,13 +147,108 @@ const Assistant = () => {
     }
   };
 
+  const handleOptionSelect = async (option: string) => {
+    setShowFallbackOptions(false);
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: option,
+      timestamp: new Date(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    try {
+      setIsLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (option === "Check Balance") {
+        const res = await fetch('/supabase/functions/mock-banking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' },
+          body: JSON.stringify({ action: 'get_balance' }),
+        }).then((r) => r.json()).catch(() => null);
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          role: 'assistant',
+          content: res && res.balance ? `Your current balance is ₹${res.balance}.` : 'Unable to fetch balance right now.',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      } else if (option === 'Recent Transactions') {
+        const res = await fetch('/supabase/functions/mock-banking', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' },
+          body: JSON.stringify({ action: 'get_transactions' }),
+        }).then((r) => r.json()).catch(() => null);
+
+        const txs = res?.transactions || [];
+        const content = txs.length
+          ? `Here are your recent transactions:\n${txs.map((t: any, i: number) => `${i+1}) ${t.description} ${t.amount}`).join('\n')}`
+          : 'No transactions available.';
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 3).toString(),
+          role: 'assistant',
+          content,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      } else if (option === 'Transfer Money') {
+        const assistantMessage: Message = {
+          id: (Date.now() + 4).toString(),
+          role: 'assistant',
+          content: 'Sure — please type: transfer to <name> amount <number>',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        setInput('transfer to ');
+      } else if (option === 'Report Scam') {
+        setShowGuardianAlert(true);
+        const assistantMessage: Message = {
+          id: (Date.now() + 5).toString(),
+          role: 'assistant',
+          content: 'Thank you — we have flagged this and paused sensitive actions. A guardian notification can be sent if needed.',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
+    } catch (err) {
+      toast.error('Action failed.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleVoiceRecord = (recording: boolean) => {
     setIsRecording(recording);
-    if (!recording) {
-      // Simulate voice to text
-      const voiceInput = "Check my balance";
-      setInput(voiceInput);
-      setTimeout(() => handleSendMessage(), 500);
+    if (recording) {
+      // Generate a short random challenge phrase for liveness
+      const words = ["green mango", "blue river", "silver coin", "seven eight nine", "bright sun"];
+      const pick = words[Math.floor(Math.random() * words.length)];
+      setChallengePhrase(pick);
+      toast.success(`Please repeat: "${pick}"`);
+    } else {
+      // Recording stopped. VoiceButton will call onResult to provide transcription and liveness.
+      // We clear the challenge after a short delay.
+      setTimeout(() => setChallengePhrase(null), 2000);
+    }
+  };
+
+  const handleVoiceResult = (result: { transcript?: string; liveness?: number; details?: any }) => {
+    if (result.transcript) {
+      setInput(result.transcript);
+      // If liveness score is provided and low, block and warn
+      if (typeof result.liveness === "number" && result.liveness < 50) {
+        setCurrentRisk("HIGH");
+        setShowGuardianAlert(true);
+        toast.error("Liveness check failed — possible deepfake detected. Transaction paused.");
+        return;
+      }
+      setTimeout(() => handleSendMessage(), 400);
+    } else if (result.details?.error) {
+      toast.error("Voice processing failed: " + result.details.error);
     }
   };
 
@@ -211,11 +322,29 @@ const Assistant = () => {
               </Card>
             </div>
           )}
+          {/* Fallback options when ML is disabled */}
+          {showFallbackOptions && (
+            <div className="flex gap-2 flex-wrap mt-2">
+              {[
+                'Check Balance',
+                'Recent Transactions',
+                'Transfer Money',
+                'Report Scam',
+              ].map((opt) => (
+                <Button key={opt} onClick={() => handleOptionSelect(opt)}>{opt}</Button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Input Area */}
         <div className="flex gap-2 items-center p-4 bg-card rounded-lg border shadow-sm">
-          <VoiceButton isRecording={isRecording} onRecord={handleVoiceRecord} />
+          <div className="flex flex-col">
+            {challengePhrase && (
+              <div className="text-xs text-muted-foreground mb-1">Repeat: "{challengePhrase}"</div>
+            )}
+            <VoiceButton isRecording={isRecording} onRecord={handleVoiceRecord} challengePhrase={challengePhrase} onResult={handleVoiceResult} />
+          </div>
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
